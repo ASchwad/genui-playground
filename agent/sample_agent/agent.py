@@ -29,17 +29,20 @@ def get_weather(location: str):
     """
     Get the weather for a given location.
     """
-    return f"The weather for {location} is 70 degrees."
+    return f"The weather for {location} is 7770 degrees."
 
-# @tool
-# def your_tool_here(your_arg: str):
-#     """Your tool description here."""
-#     print(f"Your tool logic here")
-#     return "Your tool response here."
+@tool
+def get_word(word: str):
+    """
+    Get a random word 
+    """
+    return f"Oblivion"
+
+
 
 tools = [
-    get_weather
-    # your_tool_here
+    get_weather,
+    get_word
 ]
 
 async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Literal["tool_node", "__end__"]]:
@@ -57,11 +60,15 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
     # 1. Define the model
     model = ChatOpenAI(model="gpt-4o")
 
+    # 2. Get CopilotKit actions safely
+    copilotkit_actions = state.get("copilotkit", {}).get("actions", [])
+
     # 2. Bind the tools to the model
     model_with_tools = model.bind_tools(
         [
-            *state["copilotkit"]["actions"],
+            *copilotkit_actions,
             get_weather,
+            get_word,
             # your_tool_here
         ],
 
@@ -79,13 +86,13 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
     # 4. Run the model to generate a response
     response = await model_with_tools.ainvoke([
         system_message,
-        *state["messages"],
+        *state.get("messages", []),
     ], config)
 
     # 5. Check for tool calls in the response and handle them. We ignore
     #    CopilotKit actions, as they are handled by CopilotKit.
     if isinstance(response, AIMessage) and response.tool_calls:
-        actions = state["copilotkit"]["actions"]
+        actions = copilotkit_actions
 
         # 5.1 Check for any non-copilotkit actions in the response and
         #     if there are none, go to the tool node.
