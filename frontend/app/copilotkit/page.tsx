@@ -65,6 +65,11 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
   });
 
   useLangGraphInterrupt({
+    enabled: (event) => {
+      console.log("event", event);
+      console.log("event.eventValue.type", event.eventValue.type);
+      return event.eventValue.type === "ask_name";
+    },
     render: ({ event, resolve }) => (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
         <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-6 max-w-md w-full border border-white/20">
@@ -73,7 +78,7 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
               Agent Response Required
             </h3>
             <p className="text-gray-600 bg-gray-50 rounded-lg p-4 border-l-4 border-blue-500">
-              {event.value}
+              {event.value.content}
             </p>
           </div>
           <form
@@ -144,6 +149,9 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
         <h1 className="text-4xl font-bold text-white mb-2 text-center">
           Proverbs
         </h1>
+        <p className="text-gray-200 text-center italic mb-6">
+          {state.agent_name}
+        </p>
         <p className="text-gray-200 text-center italic mb-6">
           This is a demonstrative page, but it could be anything you want! 🪁
         </p>

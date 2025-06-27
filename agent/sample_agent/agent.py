@@ -12,7 +12,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.types import Command
 from langgraph.prebuilt import ToolNode
 from copilotkit import CopilotKitState
-from copilotkit.langgraph import interrupt
+from langgraph.types import interrupt
 
 class AgentState(CopilotKitState):
     """
@@ -57,7 +57,7 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
     """
     if not state.get("agent_name"):
         # Interrupt and wait for the user to respond with a name
-        state["agent_name"] = interrupt("Before we start, what would you like to call me?") 
+        state["agent_name"] = interrupt({"type": "ask_name", "content": "Before we start, what would you like to call me?"}) 
 
     # 1. Define the model
     model = ChatOpenAI(model="gpt-4o")
