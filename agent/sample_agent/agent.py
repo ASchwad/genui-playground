@@ -12,6 +12,8 @@ from langgraph.graph import StateGraph, END
 from langgraph.types import Command
 from langgraph.prebuilt import ToolNode
 from copilotkit import CopilotKitState
+from copilotkit.langgraph import interrupt
+from copilotkit.langgraph import copilotkit_interrupt
 
 class AgentState(CopilotKitState):
     """
@@ -22,6 +24,7 @@ class AgentState(CopilotKitState):
     which will be used to set the language of the agent.
     """
     proverbs: list[str] = []
+    agent_name: str = ""
     # your_custom_agent_state: str = ""
 
 @tool
@@ -53,7 +56,16 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
     For more about the ReAct design pattern, see: 
     https://www.perplexity.ai/search/react-agents-NcXLQhreS0WDzpVaS4m9Cg
     """
-    
+    # agent_name, new_messages = copilotkit_interrupt(message="Before we start, what would you like to call me?")
+    # state["messages"] = state["messages"] + new_messages
+    # state["agent_name"] = agent_name
+    print("State", state)
+    if not state.get("agent_name"):
+            # Interrupt and wait for the user to respond with a name
+            print("Before we start, what would you like to call me?")
+            state["agent_name"] = interrupt("Before we start, what would you like to call me?") 
+            print("Name", state["agent_name"])
+
     # 1. Define the model
     model = ChatOpenAI(model="gpt-4o")
 
@@ -71,15 +83,21 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
         parallel_tool_calls=False,
     )
 
+    
+    # if not state.get("agent_name"):
+    #     # Interrupt and wait for the user to respond with a name
+    #     state["agent_name"] = interrupt("Before we start, what would you like to call me?") 
+ 
+
     # 3. Define the system message by which the chat model will be run
     system_message = SystemMessage(
-        content=f"You are a helpful assistant. Talk in {state.get('language', 'english')}."
-    )
+        content=f"You are a helpful assistant. Talk in {state.get('language', 'english')}. Your name is {state['agent_name']}, include it in your response by speaking your thoughts in third person."
+    )   
 
     # 4. Run the model to generate a response
     response = await model_with_tools.ainvoke([
         system_message,
-        *state["messages"],
+        *state["messages"]
     ], config)
 
     # 5. Check for tool calls in the response and handle them. We ignore
@@ -99,7 +117,8 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
     return Command(
         goto=END,
         update={
-            "messages": response
+            "messages": response,
+            "agent_name": state["agent_name"]
         }
     )
 
