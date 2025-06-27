@@ -13,7 +13,6 @@ from langgraph.types import Command
 from langgraph.prebuilt import ToolNode
 from copilotkit import CopilotKitState
 from copilotkit.langgraph import interrupt
-from copilotkit.langgraph import copilotkit_interrupt
 
 class AgentState(CopilotKitState):
     """
@@ -56,15 +55,9 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
     For more about the ReAct design pattern, see: 
     https://www.perplexity.ai/search/react-agents-NcXLQhreS0WDzpVaS4m9Cg
     """
-    # agent_name, new_messages = copilotkit_interrupt(message="Before we start, what would you like to call me?")
-    # state["messages"] = state["messages"] + new_messages
-    # state["agent_name"] = agent_name
-    print("State", state)
     if not state.get("agent_name"):
-            # Interrupt and wait for the user to respond with a name
-            print("Before we start, what would you like to call me?")
-            state["agent_name"] = interrupt("Before we start, what would you like to call me?") 
-            print("Name", state["agent_name"])
+        # Interrupt and wait for the user to respond with a name
+        state["agent_name"] = interrupt("Before we start, what would you like to call me?") 
 
     # 1. Define the model
     model = ChatOpenAI(model="gpt-4o")
@@ -82,12 +75,6 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
         #     the complexity of running tool calls in parallel.
         parallel_tool_calls=False,
     )
-
-    
-    # if not state.get("agent_name"):
-    #     # Interrupt and wait for the user to respond with a name
-    #     state["agent_name"] = interrupt("Before we start, what would you like to call me?") 
- 
 
     # 3. Define the system message by which the chat model will be run
     system_message = SystemMessage(
