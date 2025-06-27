@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import {
   useCoAgent,
   useCopilotAction,
@@ -8,7 +9,19 @@ import {
 import { CopilotKitCSSProperties, CopilotSidebar } from "@copilotkit/react-ui";
 import { useState } from "react";
 
+// Disable SSR to prevent hydration mismatches
+const CopilotKitPageNoSSR = dynamic(
+  () => Promise.resolve({ default: CopilotKitPageImpl }),
+  {
+    ssr: false,
+  }
+);
+
 export default function CopilotKitPage() {
+  return <CopilotKitPageNoSSR />;
+}
+
+function CopilotKitPageImpl() {
   const [themeColor, setThemeColor] = useState("#6366f1");
 
   // 🪁 Frontend Actions: https://docs.copilotkit.ai/guides/frontend-actions
