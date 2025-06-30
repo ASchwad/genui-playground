@@ -3,11 +3,13 @@
 import dynamic from "next/dynamic";
 import {
   useCoAgent,
+  useCoAgentStateRender,
   useCopilotAction,
   useLangGraphInterrupt,
 } from "@copilotkit/react-core";
 import { CopilotKitCSSProperties, CopilotSidebar } from "@copilotkit/react-ui";
 import { useState } from "react";
+import { TextMessage, MessageRole } from "@copilotkit/runtime-client-gql";
 
 // Disable SSR to prevent hydration mismatches
 const CopilotKitPageNoSSR = dynamic(
@@ -67,13 +69,22 @@ type AgentState = {
 
 function YourMainContent({ themeColor }: { themeColor: string }) {
   // 🪁 Shared State: https://docs.copilotkit.ai/coagents/shared-state
-  const { state, setState } = useCoAgent<AgentState>({
+  const { state, setState, run } = useCoAgent<AgentState>({
     name: "sample_agent",
     initialState: {
       proverbs: [
         "CopilotKit may be new, but its the best thing since sliced bread.",
       ],
       agent_name: "",
+    },
+  });
+
+  // Rendered in Chat UI for any new message
+  useCoAgentStateRender({
+    name: "sample_agent",
+    render: ({ state }) => {
+      if (!state.agent_name) return null;
+      return <div>Agent Name: {state.agent_name}</div>;
     },
   });
 
@@ -153,6 +164,20 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
     },
   });
 
+  const changeAgentName = () => {
+    setState({ ...state, agent_name: "test" });
+
+    // re-run the agent and provide a hint about what's changed
+    run(({ previousState, currentState }) => {
+      console.log("previousState", previousState);
+      console.log("currentState", currentState);
+      return new TextMessage({
+        role: MessageRole.User,
+        content: `the language has been updated from ${previousState.agent_name} to ${currentState.agent_name}`,
+      });
+    });
+  };
+
   return (
     <div
       style={{ backgroundColor: themeColor }}
@@ -191,6 +216,8 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
             </div>
           ))}
         </div>
+        <p>{state.agent_name}</p>
+        <button onClick={changeAgentName}>Set Agent Name</button>
         {state.proverbs?.length === 0 && (
           <p className="text-center text-white/80 italic my-8">
             No proverbs yet. Ask the assistant to add some!
