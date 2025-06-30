@@ -13,6 +13,8 @@ from langgraph.types import Command
 from langgraph.prebuilt import ToolNode
 from copilotkit import CopilotKitState
 from langgraph.types import interrupt
+from copilotkit.langgraph import copilotkit_emit_state
+import asyncio
 
 class AgentState(CopilotKitState):
     """
@@ -22,6 +24,7 @@ class AgentState(CopilotKitState):
     the CopilotKitState fields. We're also adding a custom field, `language`,
     which will be used to set the language of the agent.
     """
+    observed_steps: list[str] = []
     proverbs: list[str] = []
     agent_name: str = ""
     # your_custom_agent_state: str = ""
@@ -79,7 +82,19 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
     # 3. Define the system message by which the chat model will be run
     system_message = SystemMessage(
         content=f"You are a helpful assistant. Talk in {state.get('language', 'english')}. Your name is {state['agent_name']}, include it in your response by speaking your thoughts in third person."
-    )   
+    )
+    # Simulate executing steps one by one
+    steps = [
+        "Analyzing input data...",
+        "Identifying key patterns...",
+        "Generating recommendations...",
+        "Formatting final output..."
+    ]
+    
+    for step in steps:
+        state["observed_steps"] = state.get("observed_steps", []) + [step]
+        await copilotkit_emit_state(config, state) 
+        await asyncio.sleep(1)
 
     # 4. Run the model to generate a response
     response = await model_with_tools.ainvoke([

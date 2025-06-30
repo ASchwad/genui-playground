@@ -80,11 +80,29 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
   });
 
   // Rendered in Chat UI for any new message
+  // useCoAgentStateRender({
+  //   name: "sample_agent",
+  //   render: ({ state }) => {
+  //     if (!state.agent_name) return null;
+  //     return <div>Agent Name: {state.agent_name}</div>;
+  //   },
+  // });
+
+  // Add a state renderer to observe predictions
   useCoAgentStateRender({
     name: "sample_agent",
     render: ({ state }) => {
-      if (!state.agent_name) return null;
-      return <div>Agent Name: {state.agent_name}</div>;
+      if (!state.observed_steps?.length) return null;
+      return (
+        <div>
+          <h3>Current Progress:</h3>
+          <ul>
+            {state.observed_steps.map((step: string, i: number) => (
+              <li key={i}>{step}</li>
+            ))}
+          </ul>
+        </div>
+      );
     },
   });
 
