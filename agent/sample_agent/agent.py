@@ -12,7 +12,6 @@ from langgraph.graph import StateGraph, END
 from langgraph.types import Command
 from langgraph.prebuilt import ToolNode
 from copilotkit import CopilotKitState
-from langgraph.types import interrupt
 from copilotkit.langgraph import copilotkit_emit_state
 from langchain_tavily import TavilySearch
 from datetime import datetime
@@ -84,6 +83,7 @@ class AgentState(CopilotKitState):
     temperature: float = 0
     humidity: float = 0
     weather_code: float = -1
+    system_prompt: str = ""
     # your_custom_agent_state: str = ""
 
 @tool
@@ -168,9 +168,13 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
     For more about the ReAct design pattern, see: 
     https://www.perplexity.ai/search/react-agents-NcXLQhreS0WDzpVaS4m9Cg
     """
-    #if not state.get("agent_name"):
-        # Interrupt and wait for the user to respond with a name
-    #    state["agent_name"] = interrupt({"type": "ask_name", "content": "Before we start, what would you like to call me?"}) 
+    print("state", state)
+    
+    # Provide a default system prompt if none is set
+    if not state.get("system_prompt"):
+        state["system_prompt"] = "You are a helpful and knowledgeable assistant."
+    
+    print("state", state)
 
     # 1. Define the model
     model = ChatOpenAI(model="gpt-4o")
@@ -190,10 +194,9 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
     # 3. Define the system message by which the chat model will be run
     system_message = SystemMessage(
         content=f"""
-        You are a helpful assistant. Talk in {state.get('language', 'english')}. 
+        {state['system_prompt']}
+
         Never start your response by saying a question or idea or observation was good, great, fascinating, profound, excellent, or any other positive adjective. Skip the flattery and responds directly.
-        {state['agent_name'] if state['agent_name'] else "Jarvis"} is your name, include it in your response by speaking your thoughts in third person. 
-        
         Current date and time is {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
     )
 
