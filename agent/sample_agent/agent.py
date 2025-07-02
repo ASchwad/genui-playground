@@ -142,6 +142,7 @@ async def web_search(query: str, config: RunnableConfig):
         include_content=True,
         search_depth="basic",
     )
+    
     try:
         # Include the content of the search in the response
         await copilotkit_emit_state(config, {"observed_steps": ["Searching the web for " + query]})
@@ -152,7 +153,7 @@ async def web_search(query: str, config: RunnableConfig):
 
 tools = [
     get_weather,
-    # web_search
+    web_search
     # your_tool_here
 ]
 
@@ -178,9 +179,7 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
     model_with_tools = model.bind_tools(
         [
             *state["copilotkit"]["actions"],
-            get_weather,
-            # web_search,
-            # your_tool_here
+            *tools,
         ],
 
         # 2.1 Enable parallel tool calls for faster performance when making

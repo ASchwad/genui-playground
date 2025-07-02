@@ -224,6 +224,55 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
     },
   });
 
+  //🪁 Generative UI: https://docs.copilotkit.ai/coagents/generative-ui
+  useCopilotAction({
+    name: "web_search",
+    disabled: true,
+    description:
+      "Search the web for current information, use this to get the latest news or just newest information on a topic.",
+    parameters: [{ name: "query", type: "string", required: true }],
+    render: (props: {
+      args: any;
+      result:
+        | {
+            content: string;
+            observed_steps: string[];
+          }
+        | undefined;
+      status: string;
+    }) => {
+      const { result, status } = props;
+
+      return (
+        <div className="space-y-3">
+          {/* Show progress steps when executing */}
+          {status === "executing" && state.observed_steps?.length > 0 && (
+            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+              <h3 className="text-sm font-semibold text-blue-700 mb-2">
+                Searching the web...
+              </h3>
+              <ul className="text-sm text-blue-600 space-y-1">
+                {state.observed_steps.map((step: string, i: number) => (
+                  <li key={i} className="flex items-start">
+                    <span className="text-blue-500 mr-2">•</span>
+                    {step}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {status === "complete" && result && (
+            <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+              <h3 className="text-sm font-semibold text-green-700">
+                🔍 Web search completed
+              </h3>
+            </div>
+          )}
+        </div>
+      );
+    },
+  });
+
   const changeAgentName = () => {
     setState({ ...state, agent_name: "test" });
 
