@@ -10,6 +10,7 @@ import {
 import { CopilotKitCSSProperties, CopilotSidebar } from "@copilotkit/react-ui";
 import { useState } from "react";
 import { TextMessage, MessageRole } from "@copilotkit/runtime-client-gql";
+import WeatherCard from "../../components/WeatherCard";
 
 // Disable SSR to prevent hydration mismatches
 const CopilotKitPageNoSSR = dynamic(
@@ -65,6 +66,10 @@ function CopilotKitPageImpl() {
 type AgentState = {
   proverbs: string[];
   agent_name: string;
+  temperature: number;
+  humidity: number;
+  weather_code: number;
+  observed_steps: string[];
 };
 
 function YourMainContent({ themeColor }: { themeColor: string }) {
@@ -76,33 +81,19 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
         "CopilotKit may be new, but its the best thing since sliced bread.",
       ],
       agent_name: "",
+      temperature: 0,
+      humidity: 0,
+      weather_code: -1,
+      observed_steps: [],
     },
   });
 
-  // Rendered in Chat UI for any new message
-  // useCoAgentStateRender({
-  //   name: "sample_agent",
-  //   render: ({ state }) => {
-  //     if (!state.agent_name) return null;
-  //     return <div>Agent Name: {state.agent_name}</div>;
-  //   },
-  // });
-
-  // Add a state renderer to observe predictions
+  // Combined state renderer for chat UI - removed observed steps since they're now shown in tool context
   useCoAgentStateRender({
     name: "sample_agent",
-    render: ({ state }) => {
-      if (!state.observed_steps?.length) return null;
-      return (
-        <div>
-          <h3>Current Progress:</h3>
-          <ul>
-            {state.observed_steps.map((step: string, i: number) => (
-              <li key={i}>{step}</li>
-            ))}
-          </ul>
-        </div>
-      );
+    render: ({}) => {
+      // We can add other global state displays here if needed
+      return null;
     },
   });
 
@@ -123,6 +114,7 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
               {event.value.content}
             </p>
           </div>
+          <p>Temperature: {state.temperature}</p>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -173,12 +165,62 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
 
   //🪁 Generative UI: https://docs.copilotkit.ai/coagents/generative-ui
   useCopilotAction({
-    name: "getWeather",
+    name: "get_weather",
+    disabled: true,
     description: "Get the weather for a given location.",
-    available: "disabled",
     parameters: [{ name: "location", type: "string", required: true }],
-    render: ({ args }) => {
-      return <WeatherCard location={args.location} themeColor={themeColor} />;
+    render: (props: {
+      args: any;
+      result:
+        | {
+            temperature: number;
+            humidity: number;
+            weather_code: number;
+            observed_steps: string[];
+          }
+        | undefined;
+      status: string;
+    }) => {
+      const { args, result, status } = props;
+
+      return (
+        <div className="space-y-3">
+          {/* Show progress steps when executing */}
+          {status === "executing" && state.observed_steps?.length > 0 && (
+            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+              <h3 className="text-sm font-semibold text-blue-700 mb-2">
+                Getting Weather Data...
+              </h3>
+              <ul className="text-sm text-blue-600 space-y-1">
+                {state.observed_steps.map((step: string, i: number) => (
+                  <li key={i} className="flex items-start">
+                    <span className="text-blue-500 mr-2">•</span>
+                    {step}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {status === "complete" && result && (
+            <>
+              <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                <h3 className="text-sm font-semibold text-green-700">
+                  🔍 Weather Data Retrieved
+                </h3>
+              </div>
+              {/* Show weather card */}
+              <WeatherCard
+                status={status}
+                location={args.location}
+                themeColor={themeColor}
+                temperature={result?.temperature}
+                humidity={result?.humidity}
+                weather_code={result?.weather_code}
+              />
+            </>
+          )}
+        </div>
+      );
     },
   });
 
@@ -241,76 +283,6 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
             No proverbs yet. Ask the assistant to add some!
           </p>
         )}
-      </div>
-    </div>
-  );
-}
-
-// Simple sun icon for the weather card
-function SunIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      className="w-14 h-14 text-yellow-200"
-    >
-      <circle cx="12" cy="12" r="5" />
-      <path
-        d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
-        strokeWidth="2"
-        stroke="currentColor"
-      />
-    </svg>
-  );
-}
-
-// Weather card component where the location and themeColor are based on what the agent
-// sets via tool calls.
-function WeatherCard({
-  location,
-  themeColor,
-}: {
-  location?: string;
-  themeColor: string;
-}) {
-  return (
-    <div
-      style={{ backgroundColor: themeColor }}
-      className="rounded-xl shadow-xl mt-6 mb-4 max-w-md w-full"
-    >
-      <div className="bg-white/20 p-4 w-full">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-xl font-bold text-white capitalize">
-              {location}
-            </h3>
-            <p className="text-white">Current Weather</p>
-          </div>
-          <SunIcon />
-        </div>
-
-        <div className="mt-4 flex items-end justify-between">
-          <div className="text-3xl font-bold text-white">70°</div>
-          <div className="text-sm text-white">Clear skies</div>
-        </div>
-
-        <div className="mt-4 pt-4 border-t border-white">
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div>
-              <p className="text-white text-xs">Humidity</p>
-              <p className="text-white font-medium">45%</p>
-            </div>
-            <div>
-              <p className="text-white text-xs">Wind</p>
-              <p className="text-white font-medium">5 mph</p>
-            </div>
-            <div>
-              <p className="text-white text-xs">Feels Like</p>
-              <p className="text-white font-medium">72°</p>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
