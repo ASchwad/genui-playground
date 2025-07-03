@@ -1,0 +1,89 @@
+# Production environment values for genui-playground
+# Override default values for production deployment
+
+# Frontend configuration for production
+frontend:
+  replicaCount: 3
+  image:
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+  
+  env:
+    - name: NODE_ENV
+      value: "production"
+    - name: NEXT_PUBLIC_API_URL
+      value: "https://api.genui-playground.com"
+
+# Agent configuration for production
+agent:
+  replicaCount: 2
+  image:
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+    requests:
+      cpu: 1000m
+      memory: 1Gi
+  
+  env:
+    - name: ENVIRONMENT
+      value: "production"
+    - name: LOG_LEVEL
+      value: "INFO"
+    - name: OPENAI_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: genui-playground-secrets
+          key: openai-api-key
+    - name: ANTHROPIC_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: genui-playground-secrets
+          key: anthropic-api-key
+
+# Ingress configuration for production
+ingress:
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: genui-playground.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+        - path: /copilotkit
+          pathType: Prefix
+          service: agent
+  tls:
+    - secretName: genui-playground-tls
+      hosts:
+        - genui-playground.com
+
+# Enable autoscaling in production
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Production secrets (base64 encoded)
+secrets:
+  create: true
+  data: {}
+    # openai-api-key: "base64-encoded-key-here"
+    # anthropic-api-key: "base64-encoded-key-here"

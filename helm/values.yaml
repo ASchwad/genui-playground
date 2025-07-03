@@ -1,0 +1,136 @@
+# Default values for genui-playground
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+
+# Frontend (Next.js) configuration
+frontend:
+  enabled: true
+  image:
+    repository: genui-playground-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  replicaCount: 2
+  
+  service:
+    type: ClusterIP
+    port: 3000
+    targetPort: 3000
+  
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  
+  env: []
+  # - name: NEXT_PUBLIC_API_URL
+  #   value: "http://agent-service:8000"
+
+# Agent (Python FastAPI) configuration
+agent:
+  enabled: true
+  image:
+    repository: genui-playground-agent
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  replicaCount: 1
+  
+  service:
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+  
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+  
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  
+  env: []
+  # - name: OPENAI_API_KEY
+  #   valueFrom:
+  #     secretKeyRef:
+  #       name: agent-secrets
+  #       key: openai-api-key
+  # - name: PORT
+  #   value: "8000"
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+  hosts:
+    - host: genui-playground.local
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+        - path: /copilotkit
+          pathType: Prefix
+          service: agent
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod Security Context
+podSecurityContext:
+  fsGroup: 2000
+
+# Security Context
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Autoscaling
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+# ConfigMap for application configuration
+configMap:
+  create: true
+  data: {}
+    # Add any configuration data here
+
+# Secrets for sensitive data
+secrets:
+  create: true
+  data: {}
+    # Add base64 encoded secrets here
+    # openai-api-key: ""
+    # anthropic-api-key: ""

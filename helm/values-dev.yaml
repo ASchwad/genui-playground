@@ -1,0 +1,60 @@
+# Development environment values for genui-playground
+# Override default values for development deployment
+
+# Frontend configuration for development
+frontend:
+  replicaCount: 1
+  image:
+    tag: dev
+    pullPolicy: Always
+  
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  
+  env:
+    - name: NODE_ENV
+      value: "development"
+    - name: NEXT_PUBLIC_API_URL
+      value: "http://genui-playground-agent:8000"
+
+# Agent configuration for development
+agent:
+  replicaCount: 1
+  image:
+    tag: dev
+    pullPolicy: Always
+  
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  
+  env:
+    - name: ENVIRONMENT
+      value: "development"
+    - name: LOG_LEVEL
+      value: "DEBUG"
+
+# Ingress configuration for development
+ingress:
+  hosts:
+    - host: genui-playground.dev.local
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+        - path: /copilotkit
+          pathType: Prefix
+          service: agent
+
+# Disable autoscaling in development
+autoscaling:
+  enabled: false

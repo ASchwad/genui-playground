@@ -1,0 +1,19 @@
+apiVersion: v2
+name: genui-playground
+description: A Helm chart for GenUI Playground - AI-powered Next.js frontend with Python agent backend
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - nextjs
+  - python
+  - fastapi
+  - copilotkit
+  - langgraph
+  - ai
+maintainers:
+  - name: GenUI Team
+    email: info@genui.com
+home: https://github.com/your-org/genui-playground
+sources:
+  - https://github.com/your-org/genui-playground
