@@ -5,6 +5,7 @@ import {
   useCoAgent,
   useCoAgentStateRender,
   useCopilotAction,
+  useCopilotReadable,
 } from "@copilotkit/react-core";
 import { CopilotKitCSSProperties, CopilotSidebar } from "@copilotkit/react-ui";
 import { useState } from "react";
@@ -72,6 +73,11 @@ type AgentState = {
   weather_code: number;
   observed_steps: string[];
   system_prompt: string;
+  // Confirmation state
+  pending_confirmation: boolean;
+  confirmation_message: string;
+  confirmation_context: string;
+  user_response: string;
 };
 
 function YourMainContent({ themeColor }: { themeColor: string }) {
@@ -97,6 +103,11 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
       weather_code: -1,
       observed_steps: [],
       system_prompt: getConfigData(selectedConfig).system_prompt,
+      // Confirmation state
+      pending_confirmation: false,
+      confirmation_message: "",
+      confirmation_context: "",
+      user_response: "",
     },
   });
 
@@ -235,6 +246,120 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
           )}
         </div>
       );
+    },
+  });
+
+  //🪁 Confirmation UI: Renders Yes/No buttons when agent asks for confirmation
+  useCopilotAction({
+    name: "ask_user_confirmation",
+    disabled: true,
+    description: "Ask the user for Yes/No confirmation",
+    parameters: [
+      { name: "message", type: "string", required: true },
+      { name: "context", type: "string", required: false },
+    ],
+    render: (props: {
+      args: any;
+      result:
+        | {
+            message: string;
+            context: string;
+            status: string;
+          }
+        | undefined;
+      status: string;
+    }) => {
+      const { args, result, status } = props;
+      
+      const handleResponse = async (response: string) => {
+        // Update the agent state with the user's response
+        setState({
+          ...state,
+          pending_confirmation: false,
+          user_response: response,
+        });
+        
+        // Also send the response back to the agent using the action
+        // This will be picked up by the agent in the next iteration
+        try {
+          // We'll let the agent pick up the response from the state
+          console.log("User responded:", response);
+        } catch (error) {
+          console.error("Error sending confirmation response:", error);
+        }
+      };
+      
+      if (status === "executing" || (result && result.status === "waiting_for_response")) {
+        const message = args?.message || result?.message || "Do you want to proceed?";
+        const context = args?.context || result?.context || "";
+        
+        return (
+          <div className="space-y-3">
+            <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+              <div className="flex items-start space-x-3">
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+                    <span className="text-amber-600 text-lg">❓</span>
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-amber-800 mb-2">
+                    Confirmation Required
+                  </h3>
+                  <p className="text-amber-700 mb-3">{message}</p>
+                  {context && (
+                    <p className="text-amber-600 text-sm mb-3 italic">{context}</p>
+                  )}
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={() => handleResponse("yes")}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors duration-200 flex items-center space-x-2"
+                    >
+                      <span>✓</span>
+                      <span>Yes</span>
+                    </button>
+                    <button
+                      onClick={() => handleResponse("no")}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-md transition-colors duration-200 flex items-center space-x-2"
+                    >
+                      <span>✗</span>
+                      <span>No</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+      
+      if (status === "complete" && result) {
+        return (
+          <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+            <h3 className="text-sm font-semibold text-green-700">
+              ✓ Response recorded
+            </h3>
+          </div>
+        );
+      }
+      
+      return null;
+    },
+  });
+
+  // Action to handle user confirmation responses
+  useCopilotAction({
+    name: "respond_to_confirmation",
+    description: "Handle user response to confirmation request",
+    parameters: [
+      { name: "response", type: "string", description: "User's response: 'yes' or 'no'", required: true },
+    ],
+    handler: ({ response }) => {
+      setState({
+        ...state,
+        pending_confirmation: false,
+        user_response: response,
+      });
     },
   });
 

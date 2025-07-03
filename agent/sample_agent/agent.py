@@ -5,7 +5,7 @@ It defines the workflow graph, state, tools, nodes and edges.
 
 from typing_extensions import Literal
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, AIMessage, ToolMessage
+from langchain_core.messages import SystemMessage, AIMessage, ToolMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langchain.tools import tool
 from langgraph.graph import StateGraph, END
@@ -84,6 +84,11 @@ class AgentState(CopilotKitState):
     humidity: float = 0
     weather_code: float = -1
     system_prompt: str = ""
+    # Confirmation state
+    pending_confirmation: bool = False
+    confirmation_message: str = ""
+    confirmation_context: str = ""
+    user_response: str = ""
     # your_custom_agent_state: str = ""
 
 @tool
@@ -151,9 +156,51 @@ async def web_search(query: str, config: RunnableConfig):
         print(f"Error searching the web: {e}")
         return f"Error searching the web: {e}"
 
+@tool
+async def ask_user_confirmation(
+    message: str,
+    context: str = "",
+    config: RunnableConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None
+):
+    """
+    Ask the user for Yes/No confirmation. Use this tool when you need explicit user approval before proceeding with an action.
+    
+    Args:
+        message: The confirmation question to display to the user
+        context: Optional additional context about what the confirmation is for
+    """
+    
+    # Update the state to indicate a pending confirmation
+    await copilotkit_emit_state(config, {
+        "pending_confirmation": True,
+        "confirmation_message": message,
+        "confirmation_context": context,
+        "user_response": "",
+    })
+    
+    # Return the confirmation data to the frontend
+    return Command(
+        update={
+            "pending_confirmation": True,
+            "confirmation_message": message,
+            "confirmation_context": context,
+            "user_response": "",
+            "messages": [ToolMessage(
+                content=json.dumps({
+                    "message": message,
+                    "context": context,
+                    "status": "waiting_for_response"
+                }),
+                tool_call_id=tool_call_id
+            )]
+        }
+    )
+
 tools = [
     get_weather,
-    web_search
+    web_search,
+    ask_user_confirmation
     # your_tool_here
 ]
 
@@ -164,11 +211,35 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
     - The system prompt
     - Getting a response from the model
     - Handling tool calls
+    - Confirmation workflow management
 
     For more about the ReAct design pattern, see: 
     https://www.perplexity.ai/search/react-agents-NcXLQhreS0WDzpVaS4m9Cg
     """
     print("state", state)
+    
+    # Check if we're waiting for a user confirmation response
+    if state.get("pending_confirmation") and state.get("user_response"):
+        # User has responded to a confirmation request
+        user_response = state["user_response"]
+        confirmation_message = state.get("confirmation_message", "")
+        
+        # Add the user's response as a message to continue the conversation
+        confirmation_response = HumanMessage(
+            content=f"User responded '{user_response}' to the confirmation: '{confirmation_message}'"
+        )
+        
+        # Clear confirmation state and continue with the conversation
+        return Command(
+            goto="chat_node",
+            update={
+                "messages": [*state["messages"], confirmation_response],
+                "pending_confirmation": False,
+                "confirmation_message": "",
+                "confirmation_context": "",
+                "user_response": "",
+            }
+        )
     
     # Provide a default system prompt if none is set
     if not state.get("system_prompt"):
@@ -195,6 +266,11 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
     system_message = SystemMessage(
         content=f"""
         {state['system_prompt']}
+
+        You have access to a tool called 'ask_user_confirmation' that you can use when you need explicit user approval before proceeding with an action. Use this tool when:
+        - You're about to perform a potentially destructive or significant action
+        - You need user consent before proceeding
+        - The user hasn't explicitly confirmed they want to do something
 
         Never start your response by saying a question or idea or observation was good, great, fascinating, profound, excellent, or any other positive adjective. Skip the flattery and responds directly.
         Current date and time is {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
@@ -224,6 +300,10 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
                 "temperature": state["temperature"],
                 "humidity": state["humidity"],
                 "weather_code": state["weather_code"],
+                "pending_confirmation": state.get("pending_confirmation", False),
+                "confirmation_message": state.get("confirmation_message", ""),
+                "confirmation_context": state.get("confirmation_context", ""),
+                "user_response": state.get("user_response", ""),
             })
 
     # 6. We've handled all tool calls, so we can end the graph.
@@ -235,6 +315,10 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
             "temperature": state["temperature"],
             "humidity": state["humidity"],
             "weather_code": state["weather_code"],
+            "pending_confirmation": state.get("pending_confirmation", False),
+            "confirmation_message": state.get("confirmation_message", ""),
+            "confirmation_context": state.get("confirmation_context", ""),
+            "user_response": state.get("user_response", ""),
         }
     )
 
