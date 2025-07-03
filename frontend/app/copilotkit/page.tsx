@@ -72,6 +72,9 @@ type AgentState = {
   weather_code: number;
   observed_steps: string[];
   system_prompt: string;
+  // Enhanced web search state
+  search_plan: string[];
+  search_results: Record<string, any>;
 };
 
 function YourMainContent({ themeColor }: { themeColor: string }) {
@@ -97,6 +100,8 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
       weather_code: -1,
       observed_steps: [],
       system_prompt: getConfigData(selectedConfig).system_prompt,
+      search_plan: [],
+      search_results: {},
     },
   });
 
@@ -203,10 +208,66 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
             content: string;
             observed_steps: string[];
           }
+        | {
+            individual_results: Record<string, any>;
+            synthesized_summary: string;
+            search_plan: string[];
+            total_searches: number;
+          }
+        | string
+        | any[]
         | undefined;
       status: string;
     }) => {
-      const { result, status } = props;
+      const { args, result, status } = props;
+
+      // Helper function to render individual search results
+      const renderSearchResults = (searchResults: Record<string, any>) => {
+        return Object.entries(searchResults).map(([query, results], index) => (
+          <div key={index} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+            <h4 className="font-semibold text-gray-700 mb-2 text-sm">
+              🔍 {query}
+            </h4>
+            {Array.isArray(results) ? (
+              <div className="space-y-2">
+                {results.slice(0, 2).map((item: any, idx: number) => (
+                  <div key={idx} className="text-xs">
+                    {item.title && (
+                      <div className="font-medium text-blue-600 mb-1">
+                        {item.title}
+                      </div>
+                    )}
+                    {item.content && (
+                      <div className="text-gray-600 line-clamp-2">
+                        {item.content.substring(0, 150)}...
+                      </div>
+                    )}
+                    {item.url && (
+                      <a 
+                        href={item.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-500 hover:text-blue-700 text-xs"
+                      >
+                        Source →
+                      </a>
+                    )}
+                  </div>
+                ))}
+                {results.length > 2 && (
+                  <div className="text-xs text-gray-500">
+                    + {results.length - 2} more results
+                  </div>
+                )}
+              </div>
+            ) : results?.error ? (
+              <div className="text-red-500 text-xs">Error: {results.error}</div>
+            ) : (
+              <div className="text-gray-500 text-xs">No results found</div>
+            )}
+          </div>
+        ));
+      };
 
       return (
         <div className="space-y-3">
@@ -214,7 +275,7 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
           {status === "executing" && state.observed_steps?.length > 0 && (
             <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
               <h3 className="text-sm font-semibold text-blue-700 mb-2">
-                Searching the web...
+                🔍 Searching the web...
               </h3>
               <ul className="text-sm text-blue-600 space-y-1">
                 {state.observed_steps.map((step: string, i: number) => (
@@ -226,11 +287,94 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
               </ul>
             </div>
           )}
+          
           {status === "complete" && result && (
-            <div className="bg-green-50 p-3 rounded-lg border border-green-200">
-              <h3 className="text-sm font-semibold text-green-700">
-                🔍 Web search completed
-              </h3>
+            <div className="space-y-4">
+              <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                <h3 className="text-sm font-semibold text-green-700">
+                  🔍 Web search completed
+                </h3>
+                {typeof result === 'object' && 'total_searches' in result && (
+                  <p className="text-sm text-green-600 mt-1">
+                    Executed {result.total_searches} focused searches
+                  </p>
+                )}
+              </div>
+
+              {/* Handle multi-search results */}
+              {typeof result === 'object' && 'individual_results' in result && (
+                <div className="space-y-4">
+                  {/* Synthesized summary */}
+                  {result.synthesized_summary && (
+                    <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg border border-purple-200">
+                      <h4 className="font-semibold text-purple-700 mb-2 flex items-center">
+                        <span className="mr-2">📊</span>
+                        Comprehensive Summary
+                      </h4>
+                      <div className="text-sm text-gray-700 whitespace-pre-wrap">
+                        {result.synthesized_summary}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Individual search results */}
+                  <div className="space-y-3">
+                    <h4 className="font-semibold text-gray-700 text-sm">
+                      Individual Search Results:
+                    </h4>
+                    <div className="grid gap-3">
+                      {renderSearchResults(result.individual_results)}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Handle simple search results (array) */}
+              {Array.isArray(result) && (
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-gray-700 text-sm">Search Results:</h4>
+                  <div className="space-y-2">
+                    {result.slice(0, 3).map((item: any, idx: number) => (
+                      <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200">
+                        {item.title && (
+                          <div className="font-medium text-blue-600 mb-1 text-sm">
+                            {item.title}
+                          </div>
+                        )}
+                        {item.content && (
+                          <div className="text-gray-600 text-sm mb-2">
+                            {item.content.substring(0, 200)}...
+                          </div>
+                        )}
+                        {item.url && (
+                          <a 
+                            href={item.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-500 hover:text-blue-700 text-xs"
+                          >
+                            Read more →
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                    {result.length > 3 && (
+                      <div className="text-sm text-gray-500 text-center">
+                        + {result.length - 3} more results
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Handle string results */}
+              {typeof result === 'string' && (
+                <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                  <div className="text-sm text-gray-700">
+                    {result}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

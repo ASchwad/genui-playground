@@ -19,8 +19,9 @@ from time import sleep
 import aiohttp
 import json
 from langchain_core.tools import InjectedToolCallId
-from typing import Annotated
+from typing import Annotated, List, Dict, Any
 import asyncio
+import re
 
 async def get_city_coordinates(city_name):
     url = f"https://nominatim.openstreetmap.org/search?q={city_name}&format=json&limit=1"
@@ -84,7 +85,191 @@ class AgentState(CopilotKitState):
     humidity: float = 0
     weather_code: float = -1
     system_prompt: str = ""
+    # Enhanced web search state
+    search_plan: list[str] = []
+    search_results: dict[str, Any] = {}
     # your_custom_agent_state: str = ""
+
+async def plan_web_searches(query: str, config: RunnableConfig) -> List[str]:
+    """
+    Analyze a complex query and break it down into multiple specific search queries.
+    Uses GPT to understand the intent and create a search plan.
+    """
+    planning_model = ChatOpenAI(model="gpt-4o", temperature=0)
+    
+    planning_prompt = f"""
+    You are a web search planning assistant. Given a user query, break it down into specific, focused search queries that will help gather all the necessary information.
+
+    Rules:
+    1. Identify if the query requires multiple searches (e.g., time-series data, comparisons, different aspects)
+    2. Create specific, focused search queries that will return relevant results
+    3. For stock/financial queries, include specific years or timeframes
+    4. For ATH (All-Time High) requests, create separate searches for each year
+    5. Maximum 5 search queries to avoid overwhelming the user
+    6. Return ONLY a JSON array of search query strings, nothing else
+
+    Examples:
+    Query: "Stock development for last 3 years on BMW I want to have the ATH for each year"
+    Response: ["BMW stock price 2022 all time high", "BMW stock price 2023 all time high", "BMW stock price 2024 all time high", "BMW stock performance last 3 years"]
+
+    Query: "Compare Tesla and Ford stock performance"
+    Response: ["Tesla stock performance 2024", "Ford stock performance 2024", "Tesla vs Ford stock comparison"]
+
+    Query: "Current weather in New York"
+    Response: ["current weather New York"]
+
+    User Query: {query}
+    """
+    
+    try:
+        response = await planning_model.ainvoke([SystemMessage(content=planning_prompt)])
+        
+        # Extract JSON from response
+        content = response.content.strip()
+        
+        # Try to parse as JSON
+        try:
+            search_queries = json.loads(content)
+            if isinstance(search_queries, list) and len(search_queries) > 0:
+                await copilotkit_emit_state(config, {
+                    "search_plan": search_queries,
+                    "observed_steps": [f"Created search plan with {len(search_queries)} queries"]
+                })
+                return search_queries
+        except json.JSONDecodeError:
+            # Fallback: extract queries from text if JSON parsing fails
+            lines = content.split('\n')
+            queries = []
+            for line in lines:
+                line = line.strip()
+                if line and not line.startswith('#') and not line.startswith('//'):
+                    # Remove quotes and brackets
+                    clean_line = re.sub(r'^[\[\]"\']+|[\[\]"\']+$', '', line)
+                    clean_line = re.sub(r'^["\']|["\']$', '', clean_line)
+                    if clean_line:
+                        queries.append(clean_line)
+            
+            if queries:
+                await copilotkit_emit_state(config, {
+                    "search_plan": queries,
+                    "observed_steps": [f"Created search plan with {len(queries)} queries (text parsed)"]
+                })
+                return queries
+        
+        # Fallback to single query
+        await copilotkit_emit_state(config, {
+            "search_plan": [query],
+            "observed_steps": ["Using original query as single search"]
+        })
+        return [query]
+        
+    except Exception as e:
+        print(f"Error in search planning: {e}")
+        await copilotkit_emit_state(config, {
+            "search_plan": [query],
+            "observed_steps": [f"Planning failed, using original query: {str(e)}"]
+        })
+        return [query]
+
+async def execute_search_plan(search_queries: List[str], config: RunnableConfig) -> Dict[str, Any]:
+    """
+    Execute multiple web searches based on the search plan and synthesize results.
+    """
+    search = TavilySearch(
+        max_results=3,  # Reduced per query to manage total results
+        include_content=True,
+        search_depth="basic",
+    )
+    
+    all_results = {}
+    steps = []
+    
+    try:
+        for i, query in enumerate(search_queries, 1):
+            steps.append(f"Executing search {i}/{len(search_queries)}: {query}")
+            await copilotkit_emit_state(config, {"observed_steps": steps})
+            
+            try:
+                result = await search.arun(query)
+                all_results[query] = result
+                steps.append(f"✓ Completed search {i}: Found {len(result) if isinstance(result, list) else 1} results")
+                await copilotkit_emit_state(config, {"observed_steps": steps})
+                
+                # Add small delay between searches to be respectful
+                await asyncio.sleep(0.5)
+                
+            except Exception as e:
+                error_msg = f"✗ Error in search {i}: {str(e)}"
+                steps.append(error_msg)
+                all_results[query] = {"error": str(e)}
+                await copilotkit_emit_state(config, {"observed_steps": steps})
+        
+        # Synthesize results
+        steps.append("Synthesizing results from all searches...")
+        await copilotkit_emit_state(config, {"observed_steps": steps})
+        
+        synthesized = await synthesize_search_results(all_results, config)
+        
+        steps.append("✓ Search plan completed successfully")
+        await copilotkit_emit_state(config, {"observed_steps": steps})
+        
+        return {
+            "individual_results": all_results,
+            "synthesized_summary": synthesized,
+            "search_plan": search_queries,
+            "total_searches": len(search_queries)
+        }
+        
+    except Exception as e:
+        error_msg = f"Error executing search plan: {str(e)}"
+        steps.append(error_msg)
+        await copilotkit_emit_state(config, {"observed_steps": steps})
+        return {"error": error_msg, "partial_results": all_results}
+
+async def synthesize_search_results(results: Dict[str, Any], config: RunnableConfig) -> str:
+    """
+    Use GPT to synthesize multiple search results into a coherent summary.
+    """
+    synthesis_model = ChatOpenAI(model="gpt-4o", temperature=0.3)
+    
+    # Prepare results for synthesis
+    results_text = ""
+    for query, result in results.items():
+        results_text += f"\n\nSearch Query: {query}\n"
+        if isinstance(result, list):
+            for item in result:
+                if isinstance(item, dict):
+                    title = item.get('title', '')
+                    content = item.get('content', '')
+                    url = item.get('url', '')
+                    results_text += f"Title: {title}\nContent: {content[:500]}...\nURL: {url}\n\n"
+        elif isinstance(result, dict) and 'error' not in result:
+            results_text += f"Result: {str(result)[:500]}...\n"
+        elif isinstance(result, dict) and 'error' in result:
+            results_text += f"Error: {result['error']}\n"
+    
+    synthesis_prompt = f"""
+    You are a research synthesis assistant. Analyze the following search results from multiple queries and create a comprehensive, well-organized summary.
+
+    Instructions:
+    1. Identify the main topics and themes across all searches
+    2. Organize information logically (chronologically for time-series data, by category for comparisons)
+    3. Highlight key findings, numbers, and dates
+    4. Note any conflicting information or gaps
+    5. Provide a clear, actionable summary
+    6. Keep it concise but comprehensive (max 500 words)
+
+    Search Results:
+    {results_text}
+
+    Provide a well-structured synthesis:
+    """
+    
+    try:
+        response = await synthesis_model.ainvoke([SystemMessage(content=synthesis_prompt)])
+        return response.content.strip()
+    except Exception as e:
+        return f"Error synthesizing results: {str(e)}\n\nRaw results available in individual search results."
 
 @tool
 async def get_weather(
@@ -134,22 +319,40 @@ async def get_weather(
 @tool
 async def web_search(query: str, config: RunnableConfig):
     """
-    Search the web for current information, use this to get the latest news, weather or just newest information on a topic.
+    Search the web for current information. This tool can handle both simple and complex queries.
+    For complex queries requiring multiple searches (e.g., "BMW stock ATH for last 3 years"), 
+    it will automatically create a search plan and execute multiple focused searches.
     """
-    # use tavily api to search the web
-    search = TavilySearch(
-        max_results=5,
-        include_content=True,
-        search_depth="basic",
-    )
-    
     try:
-        # Include the content of the search in the response
-        await copilotkit_emit_state(config, {"observed_steps": ["Searching the web for " + query]})
-        return await search.arun(query)
+        await copilotkit_emit_state(config, {"observed_steps": ["Analyzing search query..."]})
+        
+        # Plan the searches based on query complexity
+        search_queries = await plan_web_searches(query, config)
+        
+        if len(search_queries) == 1:
+            # Simple single search
+            await copilotkit_emit_state(config, {"observed_steps": ["Executing single web search..."]})
+            search = TavilySearch(
+                max_results=5,
+                include_content=True,
+                search_depth="basic",
+            )
+            result = await search.arun(query)
+            await copilotkit_emit_state(config, {"observed_steps": ["✓ Web search completed"]})
+            return result
+        else:
+            # Complex multi-search plan
+            await copilotkit_emit_state(config, {
+                "observed_steps": [f"Executing multi-search plan with {len(search_queries)} queries..."]
+            })
+            result = await execute_search_plan(search_queries, config)
+            return result
+            
     except Exception as e:
-        print(f"Error searching the web: {e}")
-        return f"Error searching the web: {e}"
+        error_msg = f"Error searching the web: {e}"
+        print(error_msg)
+        await copilotkit_emit_state(config, {"observed_steps": [f"✗ {error_msg}"]})
+        return error_msg
 
 tools = [
     get_weather,
@@ -224,6 +427,8 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
                 "temperature": state["temperature"],
                 "humidity": state["humidity"],
                 "weather_code": state["weather_code"],
+                "search_plan": state.get("search_plan", []),
+                "search_results": state.get("search_results", {}),
             })
 
     # 6. We've handled all tool calls, so we can end the graph.
@@ -235,6 +440,8 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
             "temperature": state["temperature"],
             "humidity": state["humidity"],
             "weather_code": state["weather_code"],
+            "search_plan": state.get("search_plan", []),
+            "search_results": state.get("search_results", {}),
         }
     )
 
