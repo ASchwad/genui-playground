@@ -4,14 +4,14 @@
   "private": true,
   "description": "GenUI Playground - A monorepo with frontend and agent",
   "workspaces": [
-    "genui-frontend"
+    "frontend"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace=genui-frontend",
-    "build": "npm run build --workspace=genui-frontend",
-    "start": "npm run start --workspace=genui-frontend",
-    "lint": "npm run lint --workspace=genui-frontend",
-    "clean": "rm -rf node_modules genui-frontend/node_modules",
+    "dev": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspace=frontend",
+    "start": "npm run start --workspace=frontend",
+    "lint": "npm run lint --workspace=frontend",
+    "clean": "rm -rf node_modules frontend/node_modules",
     "agent:install": "cd agent && pip install -e .",
     "agent:dev": "cd agent && python -m sample_agent.demo"
   },
