@@ -29,12 +29,17 @@ export const metadata: Metadata = {
     "Generative UI",
     "AI agents",
   ],
-  metadataBase: new URL("https://example.com"),
+  metadataBase: new URL(
+    (typeof process !== "undefined" && process.env.NEXT_PUBLIC_SITE_URL) ||
+      "http://localhost:3000"
+  ),
   openGraph: {
     title: "GenUI Playground",
     description:
       "GenUI Playground – explore AI-powered user interfaces built with CopilotKit and Next.js.",
-    url: "https://example.com",
+    url:
+      (typeof process !== "undefined" && process.env.NEXT_PUBLIC_SITE_URL) ||
+      "http://localhost:3000",
     siteName: "GenUI Playground",
     locale: "en_US",
     type: "website",
@@ -44,10 +49,14 @@ export const metadata: Metadata = {
     title: "GenUI Playground",
     description:
       "GenUI Playground – explore AI-powered user interfaces built with CopilotKit and Next.js.",
-    creator: "@genui",
+    creator:
+      (typeof process !== "undefined" && process.env.NEXT_PUBLIC_TWITTER_HANDLE) ||
+      "",
   },
   alternates: {
-    canonical: "https://example.com",
+    canonical:
+      (typeof process !== "undefined" && process.env.NEXT_PUBLIC_SITE_URL) ||
+      "http://localhost:3000",
   },
 };
 
