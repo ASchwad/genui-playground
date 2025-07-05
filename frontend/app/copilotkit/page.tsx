@@ -8,7 +8,6 @@ import {
 } from "@copilotkit/react-core";
 import { CopilotKitCSSProperties, CopilotSidebar } from "@copilotkit/react-ui";
 import { useState } from "react";
-import { TextMessage, MessageRole } from "@copilotkit/runtime-client-gql";
 import WeatherCard from "../../components/WeatherCard";
 import { AGENT_CONFIGS, getAllConfigs } from "../../config/agent-config";
 import { AgentConfigSelector } from "../../components/AgentConfigSelector";
@@ -135,7 +134,7 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
     description: "Get the weather for a given location.",
     parameters: [{ name: "location", type: "string", required: true }],
     render: (props: {
-      args: any;
+      args: { location: string };
       result:
         | {
             temperature: number;
@@ -197,7 +196,7 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
       "Search the web for current information, use this to get the latest news or just newest information on a topic.",
     parameters: [{ name: "query", type: "string", required: true }],
     render: (props: {
-      args: any;
+      args: { query: string };
       result:
         | {
             content: string;
@@ -281,7 +280,7 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
           </p>
           <hr className="border-white/20 my-6" />
           <div className="flex flex-col gap-3">
-            {state.proverbs?.map((proverb, index) => (
+            {state.proverbs?.map((proverb, index: number) => (
               <div
                 key={index}
                 className="bg-white/15 p-4 rounded-xl text-white relative group hover:bg-white/20 transition-all"
