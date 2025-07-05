@@ -1,6 +1,5 @@
 'use client';
 
-import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -33,7 +32,7 @@ export default function Navbar() {
           Demo
         </Link>
         <a
-          href="https://github.com"
+          href="https://github.com/ASchwad/genui-playground"
           target="_blank"
           rel="noopener noreferrer"
           className="text-gray-700 hover:text-gray-900 dark:text-gray-200 dark:hover:text-white transition-colors"
